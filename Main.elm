@@ -68,8 +68,8 @@ hull pts =
       top = go LeftTurn (tail sorted) [head sorted]
       bottom = go RightTurn (tail sorted) [head sorted]
       go dir pts stack = case (pts, stack) of
-          ([], s)              -> s
-          ((p::ps), (s::[]))   -> go dir ps (p::stack)
+          ([], s)               -> s
+          ((p::ps), (s::[]))    -> go dir ps (p::stack)
           ((p::ps), (b::a::ss)) ->
               if | getDirection a b p == dir -> go dir ps (p::stack)
                  | otherwise                 -> go dir pts (a::ss)
