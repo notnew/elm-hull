@@ -8,40 +8,41 @@ data Event = Click (Int, Int) | Resize (Int, Int)
 data Dir = LeftTurn | RightTurn | Straight
 
 -- MODEL--
-model = {forms=[], sz={w=400,h=400}, pts=[], start=(0,0)}
+model = {forms=[], pts=[], start=(0,0)}
 
 -- INPUT
-evS = merges [ Resize <~ Window.dimensions
-             , Click <~ sampleOn Mouse.clicks Mouse.position
-             ]
+clickS = sampleOn Mouse.clicks <|
+           toCollageTrans <~  Mouse.position ~ Window.dimensions
 
 -- UPDATE
-update ev m = case ev of
-  Click pos -> addPoint (toCollageTrans pos m.sz) m
-  Resize (w,h) -> {m | sz <- {w=toFloat w, h=toFloat <| h-50}}
-
 addPoint p m = case m.pts of
   [] -> {m | pts <- [p], start <- p}
   _  -> if | near p m.start -> processShape m
            | otherwise -> {m | pts <- p::m.pts}
 
 processShape m =
-  let rawShape = filled gray <| polygon m.pts
+  let rawShape = polygon m.pts |> filled black |> alpha 0.5
       outline = outlined defaultLine <| polygon m.pts
-      hullOutLine = outlined {defaultLine | color <- red} <| polygon <|
+      hullStyle = {defaultLine | color <- red, width <- 2}
+      hullOutLine = outlined  hullStyle <| polygon <|
                       hull m.pts
   in {m | forms <- m.forms ++ [rawShape, outline, hullOutLine] , pts <- [] }
 
 -- DISPLAY
-display m = flip above (asText (m.pts, m.start,
-                                "dirs", getDirections m.pts,
-                                "sort", sortBy fst m.pts)) <|
-  collage (round m.sz.w) (round m.sz.h) <|
-          [ outlined defaultLine <| rect m.sz.w m.sz.h
-          , traced defaultLine <| path m.pts]
-         ++ m.forms
+display (w,h) m =
+    let (w',h') = (max 400 <|  round <| 0.7 * toFloat w,
+                   max 400 <|  round <| 0.7 * toFloat h)
+        border = outlined defaultLine <| rect (toFloat w') (toFloat h')
+    in container w h middle <| color white <|
+       collage w' h' <| border::m.forms ++ drawInProgress m
 
-main = display <~ foldp update model evS
+drawInProgress {start, pts} =
+    if | isEmpty pts -> []
+       | otherwise   -> [ traced defaultLine <| path pts
+                        , circle 2 |> filled black |> move start]
+
+modelS = foldp addPoint model clickS
+main = display <~ Window.dimensions ~ modelS
 
 -- Helpers
 near p p' = 10 > dist p p'
@@ -49,8 +50,11 @@ dist (x,y) (x',y') = sqrt <| (x-x')^2 + (y-y')^2
 diff (x,y) (x',y') = (x-x', y-y')
 
 -- translate mouse coords to collage coordinate system
-toCollageTrans (x,y) c =
-  (toFloat x - c.w/ 2, c.h/2 - toFloat y) -- y increases as the mouse lowers
+toCollageTrans (x,y) (w,h) =
+    let (halfWidth, halfHeight) = (w `div` 2, h `div` 2)
+        -- y increases as the mouse lowers
+        (x', y') = (x - halfWidth, halfHeight - y)
+    in (toFloat x', toFloat y')
 
 direction (x,y) (x', y') =
   let cross = x * y' - y * x' -- z component of cross product
